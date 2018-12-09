@@ -25,7 +25,6 @@ Clip vector datasets to buffered survey area (keep the entirety of a road featur
 """
 
 
-
 def user_select_file(file_type):
     """Allows the user to select a file location. Provides vector and raster options."""
     if file_type == "vector":
@@ -38,24 +37,22 @@ def user_select_file(file_type):
     return root.filename
 
 
-def open_vector_dataset(feature_list, file):
-    """Uses fiona to open a shapefile dataset, appending all vector features to the "features" list input.
-    feature_list is a list that will store the shapefile information, and file is the file directory."""
+def open_vector_dataset(shapefile):
+    """Uses OGR to open a shapefile dataset, returns an OGR Layer object. file is the file directory."""
 
     # Making sure the inputs are valid
-    if type(feature_list) is not list:
-        raise TypeError('The input variable storing features must be a list.')
-    if type(file) is not str:
+    if type(shapefile) is not str:
         raise TypeError('The path input must be a string of the dataset filepath.')
-    if file[-4:] != '.shp':
+    if shapefile[-4:] != '.shp':
         raise ValueError('The input vector dataset must be a shapefile.')
 
-    # Opening the shapefile and appending each feature to the aggregate list
-    with fiona.open(file, 'r') as fh:
-        for feat in fh:
-            feature_list.append(feat)
+    # Opening the shapefile
+    driver = ogr.GetDriverByName("ESRI Shapefile")
+    dataSource = driver.Open(shapefile, 0)  # 0 specifies that data can't be written to, a 1 would mean it can be written to
+    layer = dataSource.GetLayer()  # layer is an osgeo.ogr.Layer object
+    dataSource = None  # Saving and closing the dataset
 
-    return feature_list
+    return layer
 
 
 def open_raster_dataset(file, band_number=1):
@@ -101,17 +98,15 @@ def create_new_shapefile(fields, epsg_crs_code, filename = 'New_Shapefile', feat
             layer.CreateField(field_name)
 
     # For checking to make sure that the attributes actually got properly added to the layer
-    schema = []
-    # ldef = layer.GetLayerDefn()
-    # for n in range(ldef.GetFieldCount()):
-    #     fdef = ldef.GetFieldDefn(n)
-    #     schema.append(fdef.name)
-    # print(schema)
+    layer_def = layer.GetLayerDefn()
+    layer_name = layer_def.GetName()
+    check_fields = []
+    for n in range(layer_def.GetFieldCount()):
+        field_def = layer_def.GetFieldDefn(n)
+        check_fields.append(field_def.name)
+    print(f'Created new shapefile "{layer_name}" with fields {check_fields}')
 
     data_source = None # Saving and closing the data source
-
-
-
 
 
 def smart_clip_roads(clip_vector, roads, buffer = 0.5, max_road_extension = 1):
@@ -121,6 +116,13 @@ def smart_clip_roads(clip_vector, roads, buffer = 0.5, max_road_extension = 1):
     # TODO: write all this as well!
 
 
+def clip_raster_to_buffered_vector(raster_input, vector_input, buffer_dist):
+    """Given a raster dataset to be clipped and a survey area vector dataset, buffers the vector data by a desired
+    amount and then clips the raster data to this buffered area. Probably easiest to make the vector input an OGR layer
+    and use OGR's buffer and clip functions."""
+    # TODO: write all this!
+
+
 
 
 
@@ -128,25 +130,40 @@ if __name__ == '__main__':
 
 
 
-    # Opening the survey area dataset
-    #survey_area = []
-    #open_vector_dataset(survey_area, 'data/surveyarea.shp')
+    # Opening the survey area dataset (file not created yet)
+    # survey_area = []
+    # open_vector_dataset(survey_area, 'data/surveyarea.shp')
 
+    # Using OGR to open the roads shapefile (moved to vector opening function)
+    test_roads = open_vector_dataset('data/tl_2015_27_prisecroads.shp')
 
-    # Opening the vector basedata
-    #roads = [] # List to contain all vector features from the survey area shapefile
-    #open_vector_dataset(roads, user_select_file("vector")) # 'data/tl_2015_27_prisecroads.shp'
+    # Opening vector basedata using tkinter file selection
+    # open_vector_dataset(user_select_file("vector")) # 'data/tl_2015_27_prisecroads.shp'
 
+    # Calling function to open raster dataset using rasterio
     testRast = open_raster_dataset('data/n44_w094_1arc_v3.tif')
 
-    shapefile = "data/tl_2015_27_prisecroads.shp"
-    driver = ogr.GetDriverByName("ESRI Shapefile")
-    dataSource = driver.Open(shapefile, 0) # 0 specifies that data can't be written to, a 1 would mean it can be written to
-    layer = dataSource.GetLayer()
 
-    testFields = [('field_float', 'Latitude'), ('field_float', 'Longitude'),
+
+
+    # Trying out another method to open shapefile
+    shp_2 = ogr.Open("data/tl_2015_27_prisecroads.shp", 0)
+    layer_2 = shp_2.GetLayer()
+    print(layer_2.GetName())
+    print(layer_2.GetSpatialFilter())
+    # feat_2 = layer_2.GetFeature(0)
+    # geom_2 = feat_2.geometry()
+    # simplified_roads = geom_2.Simplify(2.0)
+    shp_2 = None # Saving and closing the dataset
+
+
+
+
+
+    # Creating an empty shapefile with attributes empty_fields, not really necessary at the moment
+    empty_fields = [('field_float', 'Latitude'), ('field_float', 'Longitude'),
                   ('field_int', 'Number'), ('field_str', 'Notes')]
-    create_new_shapefile(testFields, 4326, filename='data/test_empty_shapefile', feature_type='line')
+    create_new_shapefile(empty_fields, 4326, filename='data/test_empty_shapefile', feature_type='line')
 
 
 
